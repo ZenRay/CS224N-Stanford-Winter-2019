@@ -17,7 +17,8 @@ def sigmoid(x):
     """
 
     ### YOUR CODE HERE
-
+    denominator = 1 + np.exp(np.multiply(x, -1))
+    s = np.divide(1, denominator)
     ### END YOUR CODE
 
     return s
