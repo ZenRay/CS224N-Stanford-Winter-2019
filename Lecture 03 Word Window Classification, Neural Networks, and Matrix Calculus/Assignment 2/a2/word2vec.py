@@ -58,8 +58,22 @@ def naiveSoftmaxLossAndGradient(
     ### Please use the provided softmax function (imported earlier in this file)
     ### This numerically stable implementation helps you avoid issues pertaining
     ### to integer overflow. 
-
-
+    # U_w^T * v_c，因为 outsideVectors 为 N * dim，centorWordVec 为 1 * dim
+    assert outsideVectors.shape[1] == centerWordVec.shape[0], "词向量维度不统一，需要检查维度"
+    # 所有词和中心词之间的点积
+    wordVocabDots = np.dot(centerWordVec, outsideVectors.T)
+    # 是中心词和所有词汇的 softmax 值
+    y_hats = softmax(wordVocabDots)
+    # 设定对应的 outsideWordIdx 的真实值为 1
+    y = np.zeros_like(y_hats)
+    y[outsideWordIdx] = 1
+    y_hat = y_hats[outsideWordIdx]
+    # outsideWordIdx 的词对应的损失函数为 -log(softmax(\hat{y}))
+    loss = -1 * np.log(y_hat)
+    
+    gradCenterVec = np.dot(y_hats - y, outsideVectors)
+    # 对于 outside 的向量处理，需要注意是 N * 1
+    gradOutsideVecs = np.dot((y_hats - y).reshape((-1, 1)), centerWordVec.reshape((1, -1)))
     ### END YOUR CODE
 
     return loss, gradCenterVec, gradOutsideVecs
@@ -106,7 +120,20 @@ def negSamplingLossAndGradient(
     ### YOUR CODE HERE
 
     ### Please use your implementation of sigmoid in here.
-
+    # -log(\sigma (u_o^T v_c))
+    # import ipdb; ipdb.set_trace()
+    sigmoid_uo_vc = sigmoid(np.dot(outsideVectors[outsideWordIdx], centerWordVec))
+    loss = -np.log(sigmoid_uo_vc)
+    gradCenterVec = (sigmoid_uo_vc - 1) * outsideVectors[outsideWordIdx]
+    gradOutsideVecs = np.zeros(shape=outsideVectors.shape)
+    gradOutsideVecs[outsideWordIdx] = -(1 - sigmoid_uo_vc) * centerWordVec
+    # update negative samples
+    for i in negSampleWordIndices:
+        sigmoid_n_uk_vc = sigmoid(np.dot(-outsideVectors[i], centerWordVec))
+        loss += -np.log(sigmoid_n_uk_vc)
+        gradCenterVec += (1 - sigmoid_n_uk_vc) * outsideVectors[i]
+        gradOutsideVecs[i] += (1 - sigmoid_n_uk_vc) * centerWordVec
+    
 
     ### END YOUR CODE
 
@@ -149,7 +176,12 @@ def skipgram(currentCenterWord, windowSize, outsideWords, word2Ind,
     gradOutsideVectors = np.zeros(outsideVectors.shape)
 
     ### YOUR CODE HERE
-
+    for outsideWord in outsideWords:
+      loss_temp, gradCenterVec_temp, gradOutsideVecs_temp = word2vecLossAndGradient(
+          centerWordVectors[word2Ind[currentCenterWord]], word2Ind[outsideWord], outsideVectors, dataset)
+      loss += loss_temp
+      gradCenterVecs[word2Ind[currentCenterWord]] += gradCenterVec_temp
+      gradOutsideVectors += gradOutsideVecs_temp
     ### END YOUR CODE
 
     return loss, gradCenterVecs, gradOutsideVectors
@@ -199,7 +231,7 @@ def test_word2vec():
     np.random.seed(9265)
     dummy_vectors = normalizeRows(np.random.randn(10,3))
     dummy_tokens = dict([("a",0), ("b",1), ("c",2),("d",3),("e",4)])
-
+    import ipdb; ipdb.set_trace()
     print("==== Gradient check for skip-gram with naiveSoftmaxLossAndGradient ====")
     gradcheck_naive(lambda vec: word2vec_sgd_wrapper(
         skipgram, dummy_tokens, vec, dataset, 5, naiveSoftmaxLossAndGradient),
